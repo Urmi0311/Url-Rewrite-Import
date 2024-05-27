@@ -11,6 +11,7 @@ use Magento\ImportExport\Model\Import\Entity\AbstractEntity;
 use Magento\ImportExport\Model\Import\ErrorProcessing\ProcessingErrorAggregatorInterface;
 use Magento\ImportExport\Model\ResourceModel\Helper;
 use Magento\ImportExport\Model\ResourceModel\Import\Data;
+use Psr\Log\LoggerInterface;
 
 class UrlRewrite extends AbstractEntity
 {
@@ -35,6 +36,11 @@ class UrlRewrite extends AbstractEntity
         'entity_id'
     ];
 
+    /**
+     * Logger Interface
+     * @var  LoggerInterface
+     */
+    protected $logger;
     /**
      * List of valid column names
      *
@@ -71,6 +77,7 @@ class UrlRewrite extends AbstractEntity
      * @param ResourceConnection $resource Database resource connection
      * @param Helper $resourceHelper Resource helper
      * @param ProcessingErrorAggregatorInterface $errorAggregator Error aggregator for import operations
+     * @param LoggerInterface $logger Logger
      */
     public function __construct(
         JsonHelper $jsonHelper,
@@ -78,7 +85,8 @@ class UrlRewrite extends AbstractEntity
         Data $importData,
         ResourceConnection $resource,
         Helper $resourceHelper,
-        ProcessingErrorAggregatorInterface $errorAggregator
+        ProcessingErrorAggregatorInterface $errorAggregator,
+        LoggerInterface $logger
     ) {
         $this->jsonHelper = $jsonHelper;
         $this->_importExportData = $importExportData;
@@ -87,6 +95,7 @@ class UrlRewrite extends AbstractEntity
         $this->resource = $resource;
         $this->connection = $resource->getConnection(ResourceConnection::DEFAULT_CONNECTION);
         $this->errorAggregator = $errorAggregator;
+        $this->logger = $logger;
     }
 
     /**
@@ -139,10 +148,7 @@ class UrlRewrite extends AbstractEntity
      */
     public function deleteEntity(): bool
     {
-        $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/deleteentity.log');
-        $logger = new \Zend_Log();
-        $logger->addWriter($writer);
-        $logger->info("delete");
+        $this->logger->info("delete");
         $rows = [];
         while ($bunch = $this->_dataSourceModel->getNextBunch()) {
             foreach ($bunch as $rowNum => $rowData) {
@@ -151,7 +157,7 @@ class UrlRewrite extends AbstractEntity
                 if (!$this->getErrorAggregator()->isRowInvalid($rowNum)) {
                     $rowId = $rowData[static::ENTITY_ID_COLUMN];
                     $rows[] = $rowId;
-                    $logger->info('Deleting entity', ['entity_id' => $rowId]); // Log the entity ID
+                    $this->logger->info('Deleting entity', ['entity_id' => $rowId]); // Log the entity ID
                 }
 
                 if ($this->getErrorAggregator()->hasToBeTerminated()) {
@@ -172,10 +178,8 @@ class UrlRewrite extends AbstractEntity
      */
     public function saveAndReplaceEntity()
     {
-        $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/savereplace.log');
-        $logger = new \Zend_Log();
-        $logger->addWriter($writer);
-        $logger->info("save");
+
+        $this->logger->info("save");
         $behavior = $this->getBehavior();
         $rows = [];
         while ($bunch = $this->_dataSourceModel->getNextBunch()) {
@@ -202,7 +206,7 @@ class UrlRewrite extends AbstractEntity
                 $entityList[$rowId][] = $columnValues;
                 $this->countItemsCreated += (int) !isset($row[static::ENTITY_ID_COLUMN]);
                 $this->countItemsUpdated += (int) isset($row[static::ENTITY_ID_COLUMN]);
-                $logger->info('Saving entity', $columnValues); // Log the column values
+                $this->logger->info('Saving entity', $columnValues); // Log the column values
             }
 
             if (Import::BEHAVIOR_REPLACE === $behavior) {
@@ -284,10 +288,7 @@ class UrlRewrite extends AbstractEntity
      */
     public function validateRow(array $rowData, $rowNum): bool
     {
-        $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/validate.log');
-        $logger = new \Zend_Log();
-        $logger->addWriter($writer);
-        $logger->info("validate");
+        $this->logger->info("validate");
         $entityId = $rowData['entity_id'] ?? '';
         $requestPath = $rowData['request_path'] ?? '';
         $targetPath = $rowData['target_path'] ?? '';
@@ -295,27 +296,27 @@ class UrlRewrite extends AbstractEntity
         $storeId = $rowData['store_id'] ?? '';
 
         if (!$entityId) {
-            $logger->info('Entity ID is required', ['row_num' => $rowNum]);
+            $this->logger->info('Entity ID is required', ['row_num' => $rowNum]);
             $this->addRowError('EntityIdIsRequired', $rowNum);
         }
 
         if (!$requestPath) {
-            $logger->info('RequestPathIsRequired', ['row_num' => $rowNum]);
+            $this->logger->info('RequestPathIsRequired', ['row_num' => $rowNum]);
             $this->addRowError('RequestPathIsRequired', $rowNum);
         }
 
         if (!$targetPath) {
-            $logger->info('TargetPathIsRequired', ['row_num' => $rowNum]);
+            $this->logger->info('TargetPathIsRequired', ['row_num' => $rowNum]);
             $this->addRowError('TargetPathIsRequired', $rowNum);
         }
 
         if (!$storeId) {
-            $logger->info('StoreIdIsRequired', ['row_num' => $rowNum]);
+            $this->logger->info('StoreIdIsRequired', ['row_num' => $rowNum]);
             $this->addRowError('StoreIdIsRequired', $rowNum);
         }
 
         if ($redirectType === '' || !in_array((string)$redirectType, ['0', '301', '302'], true)) {
-            $logger->info('RedirectTypeIsRequired', ['row_num' => $rowNum]);
+            $this->logger->info('RedirectTypeIsRequired', ['row_num' => $rowNum]);
             $this->addRowError('RedirectTypeIsRequired', $rowNum);
         }
 
